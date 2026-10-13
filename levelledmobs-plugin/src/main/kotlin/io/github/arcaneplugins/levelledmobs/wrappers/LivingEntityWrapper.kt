@@ -51,6 +51,11 @@ import org.bukkit.persistence.PersistentDataType
  */
 class LivingEntityWrapper private constructor() : LivingEntityWrapperBase(), LivingEntityInterface {
     // privates:
+    // Volatile + replaced (never cleared in place): the async mob queue iterates this set
+    // through Utils.isLivingEntityInModalList while the wrapper may be recycled on another
+    // thread. Swapping the reference lets a reader finish on the old set instead of hitting
+    // ConcurrentModificationException. See ArcanePlugins/LevelledMobs#545.
+    @Volatile
     private var applicableGroups: MutableSet<String> = TreeSet(String.CASE_INSENSITIVE_ORDER)
     private var hasCache = false
     private var isClearingData = false
@@ -63,7 +68,11 @@ class LivingEntityWrapper private constructor() : LivingEntityWrapperBase(), Liv
     private var nametagCooldownTime = 0L
     private var _sourceSpawnerName: String? = null
     private var _sourceSpawnEggName: String? = null
-    private val applicableRules = mutableListOf<RuleInfo>()
+    // Volatile + replaced instead of cleared in place, for the same reason as applicableGroups:
+    // getApplicableRules() hands this list straight to RulesManager, which walks it off the main
+    // thread while buildCache/invalidateCache/clearEntityData can empty it.
+    @Volatile
+    private var applicableRules: MutableList<RuleInfo> = mutableListOf()
     var spawnedWGRegions = mutableSetOf<String>()
         private set
     val spawnReason = LMSpawnReason()
@@ -75,7 +84,11 @@ class LivingEntityWrapper private constructor() : LivingEntityWrapperBase(), Liv
         private set
     var chunkKillcount = 0
     var mobLevel: Int? = null
-    val mobExternalTypes: MutableSet<String> = TreeSet(String.CASE_INSENSITIVE_ORDER)
+    // Volatile + replaced instead of cleared in place, for the same reason as applicableGroups:
+    // RulesManager.isRuleApplicableEntity walks it off the main thread.
+    @Volatile
+    var mobExternalTypes: MutableSet<String> = TreeSet(String.CASE_INSENSITIVE_ORDER)
+        private set
     var rangedDamage: Float? = null
     var attributeValuesCache: MutableMap<Attribute, AttributeInstance>? = null
     val strategyResults = mutableMapOf<StrategyType, Float>()
@@ -180,9 +193,9 @@ class LivingEntityWrapper private constructor() : LivingEntityWrapperBase(), Liv
         this.customStrategyResults.clear()
         this.libsDisguiseCache = null
         this.chunkKillcount = 0
-        applicableGroups.clear()
-        applicableRules.clear()
-        mobExternalTypes.clear()
+        applicableGroups = TreeSet(String.CASE_INSENSITIVE_ORDER)
+        applicableRules = mutableListOf()
+        mobExternalTypes = TreeSet(String.CASE_INSENSITIVE_ORDER)
         this._spawnedTimeOfDay = null
         this._shouldShowLMNametag = null
         this.spawnReason.clear()
@@ -248,8 +261,7 @@ class LivingEntityWrapper private constructor() : LivingEntityWrapperBase(), Liv
             // the lines below must remain after hasCache = true to prevent stack overflow
             cachePrevChanceResults()
             val applicableRulesResult = main.rulesManager.getApplicableRules(this)
-            this.applicableRules.clear()
-            this.applicableRules.addAll(applicableRulesResult.allApplicableRules)
+            this.applicableRules = applicableRulesResult.allApplicableRules.toMutableList()
             checkChanceRules(applicableRulesResult)
             this.fineTuningAttributes = main.rulesManager.getFineTuningAttributes(this)
             this.nametagCooldownTime = main.rulesManager.getRuleNametagVisibleTime(this)
@@ -302,8 +314,8 @@ class LivingEntityWrapper private constructor() : LivingEntityWrapperBase(), Liv
     fun invalidateCache() {
         this.hasCache = false
         this.groupsAreBuilt = false
-        applicableGroups.clear()
-        applicableRules.clear()
+        applicableGroups = TreeSet(String.CASE_INSENSITIVE_ORDER)
+        applicableRules = mutableListOf()
     }
 
     fun buildCacheIfNeeded(){

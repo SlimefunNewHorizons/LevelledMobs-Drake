@@ -227,12 +227,16 @@ class EntityDeathListener : Listener {
                     continue
                 }
 
-                val chunk = lmEntity.world
-                    .getChunkAt(startingChunk.x + x, startingChunk.z + z)
-                if (!chunk.isLoaded) {
+                val chunkX = startingChunk.x + x
+                val chunkZ = startingChunk.z + z
+                // World#getChunkAt synchronously loads an absent chunk on Paper/Purpur.
+                // This runs from EntityDeathEvent on the main thread, so only inspect
+                // chunks that are already resident.
+                if (!lmEntity.world.isChunkLoaded(chunkX, chunkZ)) {
                     continue
                 }
 
+                val chunk = lmEntity.world.getChunkAt(chunkX, chunkZ)
                 result.chunkKeys.add(Utils.getChunkKey(chunk))
             }
         }
