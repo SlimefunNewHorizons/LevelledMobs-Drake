@@ -1,7 +1,7 @@
 > ### Fork de DrakesCraft — `LevelledMobs-Drake`
 >
 > Fork de [`ArcanePlugins/LevelledMobs`](https://github.com/ArcanePlugins/LevelledMobs)
-> mantenido por [DrakesCraft-Labs](https://github.com/DrakesCraft-Labs) para
+> mantenido por [SlimefunNewHorizons](https://github.com/SlimefunNewHorizons) para
 > `mc.drakescraft.cl`. Solo se aplican parches quirurgicos sobre la version
 > publicada; el resto del codigo sigue siendo el del upstream.
 >
