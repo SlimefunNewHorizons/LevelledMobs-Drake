@@ -83,6 +83,11 @@ class EntitySpawnListener : Listener{
     private fun onEntitySpawn(event: EntitySpawnEvent) {
         if (event.entity !is LivingEntity) return
         if (LevelledMobs.instance.levelManager.forcedBlockedEntityTypes.contains(event.entityType)) return
+        // Mobs tecnicos de datapacks (summon con NoAI, p. ej. el husk de From The Fog): nivelarlos no
+        // sirve y el worker async escribe su PDC mientras la funcion hace `data get entity` en el
+        // mismo tick -> ConcurrentModificationException en Saving entity NBT (Dallas #163).
+        if (event is CreatureSpawnEvent && event.spawnReason == SpawnReason.COMMAND &&
+            !(event.entity as LivingEntity).hasAI()) return
 
         val scheduler = SchedulerWrapper(event.entity){
             val lmEntity = LivingEntityWrapper.getInstance(event.entity as LivingEntity)
